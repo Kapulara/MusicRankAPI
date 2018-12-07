@@ -1,4 +1,5 @@
 import { Authenticated, BodyParams, Controller, Get, Post, Req } from '@tsed/common';
+import { Security } from '@tsed/swagger';
 import { UserEntity } from './UserEntity';
 import { UserService } from './UserService';
 
@@ -35,6 +36,7 @@ export class UserController {
 
   @Get('/whoAmI')
   @Authenticated()
+  @Security('token')
   public async whoAmI(
     @Req() req
   ) {
@@ -42,15 +44,7 @@ export class UserController {
 
     return {
       err: false,
-      data: {
-        id: user.id,
-        email: user.email,
-        token: user.token,
-        info: {
-          firstName: user.firstName,
-          lastName: user.lastName
-        }
-      }
+      data: user
     };
   }
 }

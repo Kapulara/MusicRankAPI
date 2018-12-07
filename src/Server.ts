@@ -2,7 +2,8 @@ import { GlobalAcceptMimesMiddleware, ServerLoader, ServerSettings } from '@tsed
 import '@tsed/swagger';
 import '@tsed/typeorm';
 
-console.log('include');
+require('dotenv').config();
+
 @ServerSettings({
   rootDir: __dirname,
   acceptMimes: [ 'application/json' ],
@@ -34,7 +35,17 @@ console.log('include');
     }
   ],
   swagger: {
-    path: '/api-docs'
+    path: '/api-docs',
+    spec: {
+      info: {},
+      securityDefinitions: {
+        'token': {
+          'type': 'apiKey',
+          'name': 'X-User-Token',
+          'in': 'header'
+        }
+      }
+    }
   },
   debug: false
 })
@@ -42,8 +53,8 @@ export class Server extends ServerLoader {
 
   constructor() {
     super();
-    console.log('include new server');
   }
+  
   /**
    * This method let you configure the middleware required by your application to works.
    * @returns {Server}
