@@ -16,7 +16,7 @@
     "start:dev": "nodemon --watch 'src/**/*.ts' --ignore 'node_modules/**/*' --exec ts-node src/index.ts",
     "start:db": "mongod --dbpath ./mongodb",
     "start": "ts-node src/index.ts",
-    "watch": "nodemon --config nodemon.json"
+    "watch": "nodemon --config nodemon.json -d 2s"
   },
   "author": "",
   "license": "MIT",
@@ -27,6 +27,7 @@
     "@tsed/testing": "^4.31.12",
     "@tsed/typeorm": "^4.31.12",
     "@types/lodash": "^4.14.119",
+    "@types/request": "^2.48.1",
     "@types/spotify-api": "0.0.0",
     "bcrypt": "^3.0.2",
     "body-parser": "^1.18.3",
@@ -44,6 +45,8 @@
     "passport-local": "^1.0.0",
     "passport-spotify": "^1.0.1",
     "pg": "^7.4.3",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.2",
     "serve-static": "^1.13.1",
     "spotify-web-api-node": "^4.0.0",
     "typeorm": "^0.2.7",

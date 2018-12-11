@@ -1,18 +1,32 @@
 import { Service } from '@tsed/common';
 import { TypeORMService } from '@tsed/typeorm';
 import * as _ from 'lodash';
-import { BadRequest, Unauthorized } from 'ts-httpexceptions';
+import { BadRequest, NotFound } from 'ts-httpexceptions';
+import { $log } from 'ts-log-debug';
 import { Connection, Repository } from 'typeorm';
-import * as uuidv4 from 'uuid/v4';
 import { SpotifyInformationEntity } from './spotify/SpotifyInformationEntity';
 import { UserEntity } from './UserEntity';
-import { $log } from 'ts-log-debug';
 
 @Service()
 export class UserService {
 
   public static repository: Repository<UserEntity>;
   private connection: Connection;
+  public static relations: string[] = [
+    'spotifyInformation',
+    'songProposals',
+    'votes',
+    'adminCommunities',
+    'adminCommunities.admin',
+    'adminCommunities.songProposals',
+    'adminCommunities.participants',
+    'adminCommunities.participants.spotifyInformation',
+    'communities',
+    'communities.admin',
+    'communities.songProposals',
+    'communities.participants',
+    'communities.participants.spotifyInformation',
+  ];
 
   constructor(private typeORMService: TypeORMService) {
   }
@@ -21,11 +35,24 @@ export class UserService {
     idOrToken: any,
     isToken = false
   ) {
+    let user;
     if ( isToken ) {
-      return await UserService.repository.findOne({ token: idOrToken }, { relations: [ 'spotifyInformation' ] });
+      user = await UserService.repository
+        .findOne({ token: idOrToken }, {
+          relations: this.relations
+        });
+    } else {
+      user = await UserService.repository
+        .findOne(idOrToken, {
+          relations: this.relations
+        });
     }
 
-    return await UserService.repository.findOne(idOrToken, { relations: [ 'spotifyInformation' ] });
+    if ( _.isNil(user) ) {
+      throw new NotFound('User not found.');
+    }
+
+    return user;
   }
 
   $afterRoutesInit() {
@@ -55,29 +82,6 @@ export class UserService {
 
   public async exists(email: string) {
     return _.isNil(await this.connection.manager.findOne(UserEntity, { email })) === false;
-  }
-
-  public async validate(
-    email,
-    password
-  ) {
-    if ( await this.exists(email) ) {
-      const user = await this.connection.manager.findOne(UserEntity, { email });
-
-      if ( user.verifyPassword(password) ) {
-        // Update token
-        user.token = UserEntity.generateToken();
-        await this.connection.manager.save(user);
-
-        return {
-          id: user.id,
-          email: user.email,
-          token: user.token
-        };
-      }
-    }
-
-    throw new Unauthorized('Failed to authorize with given credentials.');
   }
 
   public async createOrGetUser(spotifyInformation: any) {
@@ -132,5 +136,20 @@ export class UserService {
       await UserService.repository.insert(user);
       return user;
     }
+  }
+
+  public async getPlaylistAccount() {
+    const user = await this.connection.manager
+      .findOne(
+        UserEntity,
+        { isPlaylistAccount: true },
+        { relations: [ 'spotifyInformation', 'adminCommunities', 'communities' ] }
+      );
+
+    if ( _.isNil(user) ) {
+      throw new NotFound('User not found.');
+    }
+
+    return user;
   }
 }

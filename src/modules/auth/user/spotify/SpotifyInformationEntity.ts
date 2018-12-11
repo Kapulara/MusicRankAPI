@@ -1,3 +1,4 @@
+import * as _ from 'lodash';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('spotify-information')
@@ -15,7 +16,7 @@ export class SpotifyInformationEntity {
   @Column()
   expiresIn: number;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP'})
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   updatedDate: string;
 
   @Column()
@@ -24,4 +25,12 @@ export class SpotifyInformationEntity {
   @Column()
   json: string;
 
+  public toJSON() {
+    return {
+      id: this.id,
+      updatedDate: this.updatedDate,
+      url: this.url,
+      json: !_.isNil(this.json) ? JSON.parse(this.json) : null
+    };
+  }
 }

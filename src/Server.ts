@@ -1,6 +1,7 @@
 import { GlobalAcceptMimesMiddleware, ServerLoader, ServerSettings } from '@tsed/common';
 import '@tsed/swagger';
 import '@tsed/typeorm';
+import GlobalErrorHandlerMiddleware from './modules/GlobalErrorHandlerMiddleware';
 
 require('dotenv').config();
 
@@ -54,7 +55,7 @@ export class Server extends ServerLoader {
   constructor() {
     super();
   }
-  
+
   /**
    * This method let you configure the middleware required by your application to works.
    * @returns {Server}
@@ -114,5 +115,9 @@ export class Server extends ServerLoader {
       });
 
     return null;
+  }
+
+  $afterRoutesInit() {
+    this.use(GlobalErrorHandlerMiddleware);
   }
 }

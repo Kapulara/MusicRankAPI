@@ -1,5 +1,6 @@
 import { Authenticated, BodyParams, Controller, Get, Post, Req } from '@tsed/common';
 import { Security } from '@tsed/swagger';
+import { SpotifyLocalService } from '../../spotify/SpotifyLocalService';
 import { UserEntity } from './UserEntity';
 import { UserService } from './UserService';
 
@@ -8,7 +9,8 @@ import { UserService } from './UserService';
 export class UserController {
 
   constructor(
-    private UserService: UserService
+    private UserService: UserService,
+    private spotifyLocalService: SpotifyLocalService
   ) {
 
   }
@@ -23,24 +25,13 @@ export class UserController {
     };
   }
 
-  @Post('/authorize')
-  public async authorize(
-    @BodyParams('email') email: string,
-    @BodyParams('password') password: string
-  ) {
-    return {
-      err: false,
-      data: await this.UserService.validate(email, password)
-    };
-  }
-
   @Get('/whoAmI')
   @Authenticated()
   @Security('token')
   public async whoAmI(
     @Req() req
   ) {
-    const user: UserEntity = req.user;
+    const user = await this.spotifyLocalService.updateSpotifyInformation(req.user);
 
     return {
       err: false,

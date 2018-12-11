@@ -13,8 +13,8 @@ import * as SpotifyWebApi from 'spotify-web-api-node';
 import { Forbidden, InternalServerError } from 'ts-httpexceptions';
 import { $log } from 'ts-log-debug';
 import { Connection } from 'typeorm';
-import { UserEntity } from '../user/UserEntity';
-import { UserService } from '../user/UserService';
+import { UserEntity } from '../auth/user/UserEntity';
+import { UserService } from '../auth/user/UserService';
 import _ = require('lodash');
 import moment = require('moment');
 
@@ -165,8 +165,13 @@ export class SpotifyLocalService implements BeforeRoutesInit, AfterRoutesInit {
 
   public async apiFunction(
     functionName: string,
-    args = []
+    args = [],
+    asUser: UserEntity = null
   ) {
+    if ( !_.isNil(asUser) ) {
+      await this.checkRefresh(asUser);
+    }
+
     if ( this.allowedFunctions.indexOf(functionName) === -1 ) {
       throw new Forbidden('Not allowed to call this Spotify API function');
     }
@@ -210,10 +215,28 @@ export class SpotifyLocalService implements BeforeRoutesInit, AfterRoutesInit {
       });
   }
 
+  public async updateSpotifyInformation(user): Promise<UserEntity> {
+    const { updated, user: refreshedUser } = await this.checkRefresh(user);
+
+    if ( updated ) {
+      const { body: spotifyInformation } = await this.spotifyApi.getMe();
+
+      refreshedUser.spotifyInformation.json = JSON.stringify(spotifyInformation, null, 2);
+      $log.info(spotifyInformation);
+
+      await this.connection.manager.save(refreshedUser.spotifyInformation);
+      refreshedUser.spotifyInformation.json = spotifyInformation;
+
+      return refreshedUser;
+    }
+
+    return refreshedUser;
+  }
+
   public async checkRefresh(
     user: UserEntity,
     forceRefresh = false
-  ) {
+  ): Promise<any> {
     const updatedDate = moment(user.spotifyInformation.updatedDate);
     const currentTime = moment();
 
@@ -236,9 +259,17 @@ export class SpotifyLocalService implements BeforeRoutesInit, AfterRoutesInit {
       await this.connection.manager.save(user.spotifyInformation);
 
       this.spotifyApi.setAccessToken(access_token);
+
+      return {
+        updated: true,
+        user
+      };
     }
 
-    return user;
+    return {
+      updated: false,
+      user
+    };
   }
 
   private initializeSpotify() {
