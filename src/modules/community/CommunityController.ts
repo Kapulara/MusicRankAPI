@@ -1,4 +1,4 @@
-import { Authenticated, BodyParams, Controller, Get, PathParams, Post, Req } from '@tsed/common';
+import { Authenticated, BodyParams, Controller, Delete, Get, PathParams, Post, Put, Req } from '@tsed/common';
 import { Security } from '@tsed/swagger';
 import { UserRequest } from '../auth/MyAuthenticatedMiddleware';
 import { CommunityEntity } from './CommunityEntity';
@@ -10,6 +10,18 @@ export class CommunityController {
   constructor(
     private communityService: CommunityService
   ) {
+  }
+
+  @Get('/')
+  @Authenticated()
+  @Security('token')
+  public async getCommunities(
+    @Req() request: UserRequest
+  ) {
+    return {
+      err: false,
+      data: await this.communityService.getAll(request.user)
+    };
   }
 
   @Post('/')
@@ -25,18 +37,6 @@ export class CommunityController {
     };
   }
 
-  @Get('/')
-  @Authenticated()
-  @Security('token')
-  public async getCommunities(
-    @Req() request: UserRequest
-  ) {
-    return {
-      err: false,
-      data: request.user.communities.map((community) => community.toAllColumns(request.user))
-    };
-  }
-
   @Get('/:id')
   @Authenticated()
   @Security('token')
@@ -49,6 +49,35 @@ export class CommunityController {
     return {
       err: false,
       data: community.toAllColumns(request.user)
+    };
+  }
+
+  @Put('/:id')
+  @Authenticated()
+  @Security('token')
+  public async updateCommunity(
+    @PathParams('id') id: string,
+    @BodyParams() community: CommunityEntity,
+    @Req() request: UserRequest
+  ) {
+    const communityToUpdate = await this.communityService.getCommunity(id);
+
+    return {
+      err: false,
+      data: await this.communityService.update(communityToUpdate, community)
+    };
+  }
+
+  @Delete('/:id')
+  @Authenticated()
+  @Security('token')
+  public async deleteCommunity(
+    @PathParams('id') id: string,
+    @Req() request: UserRequest
+  ) {
+    return {
+      err: false,
+      data: await this.communityService.delete(id)
     };
   }
 

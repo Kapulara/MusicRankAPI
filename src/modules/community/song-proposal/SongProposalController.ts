@@ -39,6 +39,19 @@ export class SongProposalController {
     };
   }
 
+  @Get('/:id/songs/denied')
+  @Authenticated()
+  @Security('token')
+  public async getDeniedProposedSongs(
+    @PathParams('id') communityId: string,
+    @Req() request: UserRequest
+  ) {
+    return {
+      err: false,
+      data: await this.songProposalService.getAll(communityId, request.user, true)
+    };
+  }
+
   @Get('/:id/songs/:songId')
   @Authenticated()
   @Security('token')
@@ -106,6 +119,20 @@ export class SongProposalController {
     return {
       err: false,
       data: await this.songProposalService.accept(communityId, songId, request.user)
+    };
+  }
+
+  @Post('/:id/songs/:songId/restore')
+  @Authenticated()
+  @Security('token')
+  public async restoreProposedSong(
+    @PathParams('id') communityId: string,
+    @PathParams('songId') songId: string,
+    @Req() request: UserRequest
+  ) {
+    return {
+      err: false,
+      data: await this.songProposalService.restore(communityId, songId, request.user)
     };
   }
 

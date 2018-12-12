@@ -8,6 +8,7 @@ import { UserEntity } from '../auth/user/UserEntity';
 import { UserService } from '../auth/user/UserService';
 import { CommunityEntity } from './CommunityEntity';
 import { NotFound } from 'ts-httpexceptions';
+import { SongProposalEntity } from './song-proposal/SongProposalEntity';
 
 @Service()
 export class CommunityService {
@@ -45,6 +46,7 @@ export class CommunityService {
 
   public async createPlaylist(name: string) {
     const playlistAccount = await this.userService.getPlaylistAccount();
+    $log.info(playlistAccount);
 
     const { body: playlist } = await this.spotifyLocalService.apiFunction('createPlaylist', [
       playlistAccount.spotifyId,
@@ -60,6 +62,45 @@ export class CommunityService {
     $log.info(unfollowRequest);
 
     return playlist;
+  }
+
+  public async updatePlaylist(community: CommunityEntity) {
+    const playlistAccount = await this.userService.getPlaylistAccount();
+
+    const acceptedSongs = await this.connection
+      .manager
+      .find(SongProposalEntity, {
+        community: community.id,
+        isAccepted: true,
+        isDenied: false
+      });
+    const acceptedUris = acceptedSongs.map((acceptedSong) => acceptedSong.songId);
+
+    const { body: replacedTracks } = await this.spotifyLocalService.apiFunction('replaceTracksInPlaylist', [
+      community.playlistId,
+      []
+    ], playlistAccount);
+
+    // const { body: playlistDetails } = await this.spotifyLocalService.apiFunction('changePlaylistDetails', [
+    //   community.playlistId,
+    //   {
+    //     name: `MusicRank.club - ${community.name}`,
+    //     description: 'A curated playlist by the community over at music rank!'
+    //   }
+    // ], playlistAccount);
+    // $log.info(playlistDetails);
+
+    const uris = acceptedUris.map((acceptedUri) => `spotify:track:${acceptedUri}`);
+    if ( uris.length > 0 ) {
+      const { body: addTracks } = await this.spotifyLocalService.apiFunction('addTracksToPlaylist', [
+        community.playlistId,
+        uris
+      ], playlistAccount);
+      $log.info('addTracks', addTracks);
+    }
+
+    $log.info('replacedTracks', replacedTracks);
+    console.log(acceptedUris.map((acceptedUri) => `spotify:track:${acceptedUri}`));
   }
 
   public async getCommunity(
@@ -91,7 +132,7 @@ export class CommunityService {
         'admin',
         'songProposals',
         'participants',
-        'participants.spotifyInformation',
+        'participants.spotifyInformation'
       ]
     });
 
@@ -100,5 +141,41 @@ export class CommunityService {
     }
 
     return community;
+  }
+
+  public async getAll(user: UserEntity) {
+    const communityIds = user.communities.map((community) => community.id);
+
+    const communities = await Promise.all(
+      communityIds.map(async (communityId) => await this.getCommunity(`${communityId}`))
+    );
+
+    return communities.map((community) => community.toAllColumns(user));
+  }
+
+  public async update(
+    communityToUpdate: CommunityEntity,
+    community: CommunityEntity
+  ) {
+    communityToUpdate.name = community.name;
+    communityToUpdate.threshold = community.threshold;
+    await this.connection.manager.save(communityToUpdate);
+    await this.updatePlaylist(communityToUpdate);
+  }
+
+  public async delete(id: string) {
+    const communityToDelete = await this.getCommunity(id);
+
+    await Promise.all(
+      communityToDelete
+        .songProposals
+        .map(async (songProposal) => this.connection.manager.remove(songProposal))
+    );
+
+    communityToDelete
+      .participants
+      .length = 0;
+
+    await this.connection.manager.remove(communityToDelete);
   }
 }

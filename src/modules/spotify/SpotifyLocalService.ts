@@ -168,6 +168,7 @@ export class SpotifyLocalService implements BeforeRoutesInit, AfterRoutesInit {
     args = [],
     asUser: UserEntity = null
   ) {
+    $log.info('Executing as user', asUser);
     if ( !_.isNil(asUser) ) {
       await this.checkRefresh(asUser);
     }
@@ -195,6 +196,7 @@ export class SpotifyLocalService implements BeforeRoutesInit, AfterRoutesInit {
         return await this.spotifyApi[ functionName ]();
       }
     } catch (err) {
+      console.trace();
       $log.error(err);
       throw new InternalServerError(err.message);
     }

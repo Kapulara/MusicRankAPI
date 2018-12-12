@@ -1,13 +1,13 @@
 import { Service } from '@tsed/common';
 import { TypeORMService } from '@tsed/typeorm';
 import * as _ from 'lodash';
+import { Forbidden } from 'ts-httpexceptions';
 import { Connection } from 'typeorm';
 import { UserEntity } from '../../auth/user/UserEntity';
 import { CommunityEntity } from '../CommunityEntity';
 import { CommunityService } from '../CommunityService';
 import { SongCacheService } from './song-cache/SongCacheService';
 import { SongProposalEntity } from './SongProposalEntity';
-import { BadRequest, Forbidden } from 'ts-httpexceptions';
 
 @Service()
 export class SongProposalService {
@@ -29,7 +29,6 @@ export class SongProposalService {
     songId: string,
     community: CommunityEntity
   ) {
-
   }
 
   public async propose(
@@ -44,13 +43,19 @@ export class SongProposalService {
       throw new Forbidden('This song is already proposed.');
     }
 
+    const userWithProposals = await this.connection.manager.findOne(UserEntity, user.id, {
+      relations: [
+        'songProposals'
+      ]
+    });
+
     songProposal.community = community;
-    songProposal.createdBy = user;
+    songProposal.createdBy = userWithProposals;
     songProposal.votes = [];
     await this.connection.manager.save(songProposal);
 
-    user.songProposals.push(songProposal);
-    await this.connection.manager.save(user);
+    userWithProposals.songProposals.push(songProposal);
+    await this.connection.manager.save(userWithProposals);
     community.songProposals.push(songProposal);
     await this.connection.manager.save(community);
 
@@ -61,15 +66,26 @@ export class SongProposalService {
 
   public async getAll(
     communityId: string,
-    user: UserEntity
+    user: UserEntity,
+    onlyDenied = false
   ) {
     const community = await this.communityService.getCommunity(communityId);
-    const songProposals = await this.connection.manager.find(SongProposalEntity, {
-      where: {
+    let where = {
+      community: community.id,
+      isAccepted: false,
+      isDenied: false
+    };
+
+    if ( onlyDenied ) {
+      where = {
         community: community.id,
         isAccepted: false,
-        isDenied: false
-      },
+        isDenied: true
+      };
+    }
+
+    let songProposals = await this.connection.manager.find(SongProposalEntity, {
+      where,
       relations: [
         'community',
         'community.admin',
@@ -80,7 +96,7 @@ export class SongProposalService {
       ]
     });
 
-    return await Promise.all(
+    songProposals = await Promise.all(
       songProposals
         .map((songProposal) => songProposal.toJSON())
         .map(async (songProposal: any) => {
@@ -89,6 +105,13 @@ export class SongProposalService {
           return songProposal;
         })
     );
+
+    songProposals = songProposals.sort((
+      a,
+      b
+    ) => b.votes.length - a.votes.length);
+
+    return songProposals;
   }
 
   public async findOne(
@@ -131,6 +154,7 @@ export class SongProposalService {
     songProposal.isDenied = true;
     songProposal.isAccepted = false;
     await this.connection.manager.save(songProposal);
+    await this.communityService.updatePlaylist(community);
 
     return songProposal;
   }
@@ -156,6 +180,33 @@ export class SongProposalService {
     songProposal.isAccepted = true;
     songProposal.isDenied = false;
     await this.connection.manager.save(songProposal);
+    await this.communityService.updatePlaylist(community);
+
+    return songProposal;
+  }
+
+  public async restore(
+    communityId: string,
+    songId: string,
+    user: UserEntity
+  ) {
+    const community = await this.communityService.getCommunity(communityId);
+    const fullCommunity = community.toAllColumns(user);
+
+    if ( !fullCommunity.isAdmin ) {
+      throw new Forbidden('Not admin in community.');
+    }
+
+    const songProposal = await this.findOne(songId, communityId);
+
+    if ( songProposal.isAccepted ) {
+      throw new Forbidden('Song already accepted.');
+    }
+
+    songProposal.isAccepted = false;
+    songProposal.isDenied = false;
+    await this.connection.manager.save(songProposal);
+    await this.communityService.updatePlaylist(community);
 
     return songProposal;
   }
@@ -167,21 +218,27 @@ export class SongProposalService {
   ) {
     await this.communityService.getCommunity(communityId);
     const songProposal = await this.findOne(songId, communityId);
+    const userEntity = await this.connection.manager.findOne(UserEntity, {
+      where: {
+        id: user.id
+      },
+      relations: [ 'votes' ]
+    });
 
     if (
       songProposal
         .votes
         .map((user) => user.id)
-        .indexOf(user.id) > -1
+        .indexOf(userEntity.id) > -1
     ) {
       throw new Forbidden('Cannot vote twice on song.');
     }
 
-    songProposal.votes.push(user);
+    songProposal.votes.push(userEntity);
     await this.connection.manager.save(songProposal);
 
-    user.votes.push(songProposal);
-    await this.connection.manager.save(user);
+    userEntity.votes.push(songProposal);
+    await this.connection.manager.save(userEntity);
 
     return songProposal;
   }
@@ -193,13 +250,19 @@ export class SongProposalService {
   ) {
     await this.communityService.getCommunity(communityId);
     const songProposal = await this.findOne(songId, communityId);
+    const userEntity = await this.connection.manager.findOne(UserEntity, {
+      where: {
+        id: user.id
+      },
+      relations: [ 'votes' ]
+    });
 
     const voteIndex = songProposal
       .votes
       .map((user) => user.id)
-      .indexOf(user.id);
+      .indexOf(userEntity.id);
 
-    if ( voteIndex === 1 ) {
+    if ( voteIndex === -1 ) {
       throw new Forbidden('Cannot remove non-existing vote.');
     }
 
@@ -210,9 +273,9 @@ export class SongProposalService {
     songProposal.votes.splice(proposalVoteIndex, 1);
     await this.connection.manager.save(songProposal);
 
-    const userVote = _.find(user.votes, { id: voteId });
-    const userVoteIndex = user.votes.indexOf(userVote);
-    user.votes.splice(userVoteIndex, 1);
-    await this.connection.manager.save(user);
+    const userVote = _.find(userEntity.votes, { id: voteId });
+    const userVoteIndex = userEntity.votes.indexOf(userVote);
+    userEntity.votes.splice(userVoteIndex, 1);
+    await this.connection.manager.save(userEntity);
   }
 }

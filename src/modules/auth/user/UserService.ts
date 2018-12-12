@@ -14,16 +14,12 @@ export class UserService {
   private connection: Connection;
   public static relations: string[] = [
     'spotifyInformation',
-    'songProposals',
-    'votes',
     'adminCommunities',
     'adminCommunities.admin',
-    'adminCommunities.songProposals',
     'adminCommunities.participants',
     'adminCommunities.participants.spotifyInformation',
     'communities',
     'communities.admin',
-    'communities.songProposals',
     'communities.participants',
     'communities.participants.spotifyInformation',
   ];
